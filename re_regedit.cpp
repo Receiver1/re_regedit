@@ -34,17 +34,42 @@ void RegEdit::createCatalog(Key key, const std::string &catalog) {
                               REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, nullptr,
                               &keyHandle_, nullptr)};
   if (result != ERROR_SUCCESS) {
-    throw std::system_error{result, std::system_category()};
+    throw std::system_error{result, std::system_category(), __FUNCTION__};
   }
 
   isOpened_ = true;
 }
 
+void RegEdit::queryValue(const std::string &key,
+                const std::function<void *(const QueriedValue &)> &callback) {
+  DWORD type{};
+  DWORD size{};
+
+  auto result{RegQueryValueExA(keyHandle_, key.c_str(), nullptr, &type, nullptr,
+                               &size)};
+  if (result != ERROR_SUCCESS && result != ERROR_MORE_DATA) {
+    throw std::system_error{result, std::system_category()};
+  }
+
+  QueriedValue queriedValue{size, type};
+  void *value = callback(queriedValue);
+  if (value == nullptr) {
+    return;
+  }
+
+  LPBYTE valueConv{reinterpret_cast<LPBYTE>(value)};
+  result = RegQueryValueExA(keyHandle_, key.c_str(), nullptr, &type, valueConv,
+                            &size);
+  if (result != ERROR_SUCCESS) {
+    throw std::system_error{result, std::system_category()};
+  }
+}
+
 const std::string RegEdit::getString(const std::string &key) {
   std::string value{};
 
-  this->queryValue<std::string>(
-      key, value, [&](const QueriedValue &queriedValue) {
+  this->queryValue(
+      key, [&](const QueriedValue &queriedValue) {
         if (queriedValue.type != REG_SZ) {
           throw std::system_error{ERROR_DATATYPE_MISMATCH,
                                   std::system_category(),
@@ -52,7 +77,7 @@ const std::string RegEdit::getString(const std::string &key) {
         }
 
         value.resize(queriedValue.size);
-        return false;
+        return &value[0];
       });
 
   return value;
@@ -61,14 +86,14 @@ const std::string RegEdit::getString(const std::string &key) {
 const unsigned long RegEdit::getUlong(const std::string &key) {
   unsigned long value{};
 
-  this->queryValue<unsigned long>(
-      key, value, [&](const QueriedValue &queriedValue) {
+  this->queryValue(
+      key, [&](const QueriedValue &queriedValue) {
         if (queriedValue.type != REG_DWORD) {
           throw std::system_error{ERROR_DATATYPE_MISMATCH,
                                   std::system_category(),
                                   "Readed data type mismatch"};
         }
-        return false;
+        return &value;
       });
 
   return value;
@@ -81,7 +106,7 @@ void RegEdit::setString(const std::string &key, const std::string &value) {
   auto result{
       RegSetValueExA(keyHandle_, key.c_str(), 0, REG_SZ, valueConv, size)};
   if (result != ERROR_SUCCESS) {
-    throw std::system_error{result, std::system_category()};
+    throw std::system_error{result, std::system_category(), __FUNCTION__};
   }
 }
 
@@ -92,7 +117,7 @@ void RegEdit::setUlong(const std::string &key, const unsigned long value) {
   auto result{
       RegSetValueExA(keyHandle_, key.c_str(), 0, REG_DWORD, valueConv, size)};
   if (result != ERROR_SUCCESS) {
-    throw std::system_error{result, std::system_category()};
+    throw std::system_error{result, std::system_category(), __FUNCTION__};
   }
 }
 
@@ -108,7 +133,7 @@ void RegEdit::removeCatalog(Key key, const std::string &catalog) {
 
   auto result{RegDeleteKeyExA(keyHandle, catalog.c_str(), KEY_WOW64_32KEY, 0)};
   if (result != ERROR_SUCCESS) {
-    throw std::system_error{result, std::system_category()};
+    throw std::system_error{result, std::system_category(), __FUNCTION__};
   }
 }
 
@@ -118,7 +143,7 @@ void RegEdit::closeCatalog() {
 
   auto result{RegCloseKey(keyHandle_)};
   if (result != ERROR_SUCCESS) {
-    throw std::system_error{result, std::system_category()};
+    throw std::system_error{result, std::system_category(), __FUNCTION__};
   }
 
   isOpened_ = false;

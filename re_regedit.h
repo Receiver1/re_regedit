@@ -3,6 +3,7 @@
 #include <functional>
 #include <system_error>
 #include <windows.h>
+#include <iostream>
 
 class RegEdit {
 public:
@@ -39,30 +40,8 @@ public:
    */
   void createCatalog(Key key, const std::string &catalog);
 
-  template <typename _ValueType>
-  void queryValue(const std::string &key, _ValueType &value,
-                  const std::function<bool(const QueriedValue &)> &callback) {
-    DWORD type{};
-    DWORD size{};
-    LPBYTE valueConv{reinterpret_cast<LPBYTE>(&value)};
-
-    auto result{RegQueryValueExA(keyHandle_, key.c_str(), nullptr, &type,
-                                 valueConv, &size)};
-    if (result != ERROR_SUCCESS && result != ERROR_MORE_DATA) {
-      throw std::system_error{result, std::system_category()};
-    }
-
-    QueriedValue queriedValue{size, type};
-    if (callback(queriedValue)) {
-      return;
-    }
-
-    result = RegQueryValueExA(keyHandle_, key.c_str(), nullptr, &type,
-                              valueConv, &size);
-    if (result != ERROR_SUCCESS) {
-      throw std::system_error{result, std::system_category()};
-    }
-  }
+  void queryValue(const std::string &key,
+                  const std::function<void *(const QueriedValue &)> &callback);
 
   /*!
    * \brief Get string value from registry
